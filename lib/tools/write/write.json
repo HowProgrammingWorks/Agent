@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "write",
+    "description": "Create or overwrite a UTF-8 text file in the project workspace.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "File path relative to the workspace root."
+        },
+        "content": {
+          "type": "string",
+          "description": "Complete new file contents."
+        }
+      },
+      "required": ["path", "content"]
+    }
+  }
+}

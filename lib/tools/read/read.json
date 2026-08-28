@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "read",
+    "description": "Read a UTF-8 text file from the project workspace.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "File path relative to the workspace root."
+        }
+      },
+      "required": ["path"]
+    }
+  }
+}

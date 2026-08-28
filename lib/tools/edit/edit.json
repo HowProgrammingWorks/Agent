@@ -1,0 +1,25 @@
+{
+  "type": "function",
+  "function": {
+    "name": "edit",
+    "description": "Replace exactly one unique text fragment in an existing UTF-8 file.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "File path relative to the workspace root."
+        },
+        "old_text": {
+          "type": "string",
+          "description": "Exact existing text to replace. It must occur exactly once."
+        },
+        "new_text": {
+          "type": "string",
+          "description": "Replacement text."
+        }
+      },
+      "required": ["path", "old_text", "new_text"]
+    }
+  }
+}
