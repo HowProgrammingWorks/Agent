@@ -1,0 +1,29 @@
+{
+  "name": "tiny-agent-harness",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A small modular agentic coding harness using Gemini via the OpenAI-compatible Chat Completions API.",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "tiny-agent": "./start.js"
+  },
+  "scripts": {
+    "start": "node start.js",
+    "check": "node --check start.js && node --check lib/agent.js && node --check lib/llm.js && node --check lib/permissions.js && node --check lib/workspace.js && node --check lib/color.js && node --check lib/tools/read/read.js && node --check lib/tools/write/write.js && node --check lib/tools/edit/edit.js && node --check lib/tools/bash/bash.js",
+    "lint": "eslint . && prettier --check --no-error-on-unmatched-pattern \"**/*.js\" \"**/*.json\" \"**/*.md\" \"**/*.ts\"",
+    "fix": "eslint . --fix && prettier --write --no-error-on-unmatched-pattern \"**/*.js\" \"**/*.json\" \"**/*.md\" \"**/*.ts\""
+  },
+  "dependencies": {
+    "concolor": "^1.1.4",
+    "metautil": "^5.5.2",
+    "openai": "latest"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.4",
+    "eslint-config-metarhia": "^9.1.9",
+    "metaskills": "^1.0.5",
+    "prettier": "^3.8.4"
+  }
+}
