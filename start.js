@@ -5,7 +5,16 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { isError, isHashObject } = require('metautil');
+const { isError } = require('metautil');
+const concolor = require('concolor');
+
+const color = concolor({
+  title: 'b,cyan',
+  muted: 'f,white',
+  warn: 'b,yellow',
+  error: 'b,red',
+  final: 'b,green',
+});
 
 const CONFIG_PATH = path.join(__dirname, 'config.js');
 const TEMPLATE_PATH = path.join(__dirname, 'lib', 'config.template.js');
@@ -19,9 +28,10 @@ const ensureConfig = () => {
 const createdConfig = ensureConfig();
 
 const { runAgent } = require('./lib/agent.js');
-const { color } = require('./lib/color.js');
+const { startIde } = require('./lib/ide/index.js');
 const { createGeminiProvider } = require('./lib/llm.js');
 const { createPermissions } = require('./lib/permissions.js');
+const { createToolRegistry } = require('./lib/registry.js');
 const { createWorkspace } = require('./lib/workspace.js');
 const config = require('./config.js');
 
@@ -29,7 +39,6 @@ const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const DEFAULT_MAX_STEPS = 30;
 const MIN_STEPS = 1;
 const MAX_STEPS = 200;
-const TOOLS_DIR = path.join(__dirname, 'lib', 'tools');
 const USAGE = fs
   .readFileSync(path.join(__dirname, 'lib', 'usage.md'), 'utf8')
   .trim();
@@ -39,34 +48,6 @@ const errorText = (error) => {
   if (typeof error === 'string') return error;
   if (error === null || error === undefined) return '';
   return `${error}`;
-};
-
-const isTool = (value) =>
-  isHashObject(value) &&
-  value.definition &&
-  typeof value.execute === 'function';
-
-const loadTool = (dirent) => {
-  if (!dirent.isDirectory()) return null;
-  const jsPath = path.join(TOOLS_DIR, dirent.name, `${dirent.name}.js`);
-  if (!fs.existsSync(jsPath)) return null;
-  const exported = require(jsPath);
-  return Object.values(exported).find(isTool) ?? null;
-};
-
-const createToolRegistry = () => {
-  const entries = fs.readdirSync(TOOLS_DIR, { withFileTypes: true });
-  const tools = entries.map(loadTool).filter(Boolean);
-  const byName = new Map(
-    tools.map((tool) => [tool.definition.function.name, tool]),
-  );
-  const definitions = tools.map((tool) => tool.definition);
-  return {
-    definitions,
-    get(name) {
-      return byName.get(name);
-    },
-  };
 };
 
 const requireValue = (argv, index, flag) => {
@@ -95,6 +76,10 @@ const flagYes = (options) => {
   options.autoApprove = true;
 };
 
+const flagIde = (options) => {
+  options.ide = true;
+};
+
 const flagModel = (options, argv, i) => {
   options.model = requireValue(argv, i + 1, '--model');
   return 1;
@@ -116,6 +101,7 @@ const FLAGS = {
   '-h': flagHelp,
   '--yes': flagYes,
   '-y': flagYes,
+  '--ide': flagIde,
   '--model': flagModel,
   '--max-steps': flagMaxSteps,
   '--workspace': flagWorkspace,
@@ -125,6 +111,8 @@ const parseArgs = (argv) => {
   const envModel = process.env.TINY_AGENT_MODEL;
   const options = {
     autoApprove: false,
+    ide: false,
+    help: false,
     model: envModel || config.TINY_AGENT_MODEL || DEFAULT_MODEL,
     maxSteps: DEFAULT_MAX_STEPS,
     workspace: process.cwd(),
@@ -162,25 +150,53 @@ const resolveApiKey = () => {
   return raw.trim();
 };
 
-const main = async () => {
-  const options = parseArgs(process.argv.slice(2));
+const missingKey = () => {
+  if (createdConfig) console.log(color.warn('Created config.js\n'));
+  console.log(color.error('GEMINI_API_KEY is not set.\n'));
+  console.log(USAGE);
+};
 
-  if (options.help || !options.task) {
-    console.log(USAGE);
-    process.exitCode = options.help ? 0 : 1;
-    return;
-  }
-
-  if (!resolveApiKey()) {
-    if (createdConfig) {
-      console.log(color.warn('Created config.js\n'));
-    }
-    console.log(color.error('GEMINI_API_KEY is not set.\n'));
-    console.log(USAGE);
+const launchIde = async (options) => {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.log(color.error('IDE needs an interactive terminal.'));
     process.exitCode = 1;
     return;
   }
 
+  const workspace = await createWorkspace(options.workspace);
+  const askRef = { current: async () => false };
+  const loggerRef = { log: () => {} };
+  const permissions = createPermissions({
+    autoApprove: options.autoApprove,
+    ask: (description) => askRef.current(description),
+  });
+  const provider = createGeminiProvider({
+    model: options.model,
+    logger: loggerRef,
+  });
+  const toolRegistry = createToolRegistry();
+
+  try {
+    await startIde({
+      workspace,
+      provider,
+      toolRegistry,
+      permissions,
+      maxSteps: options.maxSteps,
+      bindAsk: (ask) => {
+        askRef.current = ask;
+      },
+      bindLogger: (log) => {
+        loggerRef.log = log;
+      },
+      initialTask: options.task,
+    });
+  } finally {
+    permissions.close();
+  }
+};
+
+const launchCli = async (options) => {
   const workspace = await createWorkspace(options.workspace);
   const provider = createGeminiProvider({ model: options.model });
   const toolRegistry = createToolRegistry();
@@ -192,7 +208,7 @@ const main = async () => {
   console.log(color.muted(`approval:  ${approval}`));
 
   try {
-    const finalText = await runAgent({
+    const { text } = await runAgent({
       task: options.task,
       provider,
       toolRegistry,
@@ -201,10 +217,34 @@ const main = async () => {
       maxSteps: options.maxSteps,
     });
     console.log(color.final('\n=== final ===\n'));
-    console.log(finalText);
+    console.log(text);
   } finally {
     permissions.close();
   }
+};
+
+const main = async () => {
+  const options = parseArgs(process.argv.slice(2));
+
+  if (options.help) {
+    console.log(USAGE);
+    return;
+  }
+
+  const useIde = options.ide || !options.task;
+
+  if (!resolveApiKey()) {
+    missingKey();
+    process.exitCode = 1;
+    return;
+  }
+
+  if (useIde) {
+    await launchIde(options);
+    return;
+  }
+
+  await launchCli(options);
 };
 
 main().catch((error) => {
