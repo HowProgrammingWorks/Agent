@@ -11,7 +11,7 @@
   },
   "scripts": {
     "start": "node start.js",
-    "check": "node --check start.js && node --check lib/agent.js && node --check lib/llm.js && node --check lib/permissions.js && node --check lib/workspace.js && node --check lib/color.js && node --check lib/tools/read/read.js && node --check lib/tools/write/write.js && node --check lib/tools/edit/edit.js && node --check lib/tools/bash/bash.js",
+    "check": "find . -name '*.js' -not -path './node_modules/*' -not -path './.git/*' -not -path './.cursor/*' -print0 | xargs -0 -n1 node --check",
     "lint": "eslint . && prettier --check --no-error-on-unmatched-pattern \"**/*.js\" \"**/*.json\" \"**/*.md\" \"**/*.ts\"",
     "fix": "eslint . --fix && prettier --write --no-error-on-unmatched-pattern \"**/*.js\" \"**/*.json\" \"**/*.md\" \"**/*.ts\""
   },

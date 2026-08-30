@@ -1,29 +1,21 @@
 tiny-agent — small modular coding-agent harness
 
 Usage:
-node start.js [options] [task]
-npm start -- [options] [task]
+node start.js [project-root]
+npm start -- [project-root]
 
-With no task, opens the terminal IDE (file tree, editor, shell, agent).
-With a task and no --ide, runs the agent once in the CLI and prints the result.
-
-Options:
---ide Open the terminal IDE (also the default when no task is given)
---yes, -y Auto-approve all write/edit/bash tool calls
---model <name> Model name (default: config.js, TINY_AGENT_MODEL, or gemini-3.5-flash-lite)
-Busy models fall back to gemini-3.5-flash, then gemini-3.6-flash
---max-steps <n> Maximum agent turns (default: 30)
---workspace <path> Workspace root (default: current directory)
---help, -h Show this help
+Opens the terminal IDE (file tree, editor, shell, agent).
+The workspace is the given directory, or the current directory if omitted.
+Model and key come from config.js or GEMINI_API_KEY / TINY_AGENT_MODEL
+in the environment.
 
 IDE keys:
 tab Cycle tree / editor / terminal / agent
 click a pane to focus it; click a file to open it
 click ✕ in the title bar to quit
-click 🧠 in the title bar for help; ? from the tree or editor view
+click 🧠 in the title bar for help; ? from the tree
 f10 Quit
-i Edit in the editor; esc return to view
-l Toggle line numbers (editor view)
+l Toggle line numbers in help or other readonly editor content
 drag in the editor, terminal, or chat to copy text
 shift+arrows Select in the editor or chat input
 ctrl+c Copy selection in the editor or chat; quit from other panes
@@ -38,10 +30,7 @@ enter Open a file or folder; send agent text; run a shell command; new line in t
 
 Examples:
 node start.js
-node start.js --workspace ../my-project
-node start.js "Explain this project"
-node start.js --ide --yes "Fix the failing tests"
-node start.js --yes --model gemini-3.5-flash-lite "Add input validation and run tests"
+node start.js ../my-project
 
 Config (config.js):
 Created automatically if missing.
