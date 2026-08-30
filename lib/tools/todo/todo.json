@@ -1,0 +1,40 @@
+{
+  "type": "function",
+  "function": {
+    "name": "todo",
+    "description": "Track an in-run task list. merge true (default) upserts by id; merge false replaces the list.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "todos": {
+          "type": "array",
+          "description": "Task items.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Stable item id."
+              },
+              "content": {
+                "type": "string",
+                "description": "Task description."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["pending", "in_progress", "completed", "cancelled"],
+                "description": "Task status."
+              }
+            },
+            "required": ["id", "content", "status"]
+          }
+        },
+        "merge": {
+          "type": "boolean",
+          "description": "Upsert by id when true (default). Replace list when false."
+        }
+      },
+      "required": ["todos"]
+    }
+  }
+}

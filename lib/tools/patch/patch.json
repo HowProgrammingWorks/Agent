@@ -1,0 +1,36 @@
+{
+  "type": "function",
+  "function": {
+    "name": "patch",
+    "description": "Apply several unique text replacements to one existing UTF-8 file. Prefer edit for a single fragment; write for a full rewrite.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "File path relative to the workspace root."
+        },
+        "hunks": {
+          "type": "array",
+          "description": "Ordered replacements. Each old_text must occur exactly once at apply time.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "old_text": {
+                "type": "string",
+                "description": "Exact existing text to replace."
+              },
+              "new_text": {
+                "type": "string",
+                "description": "Replacement text."
+              }
+            },
+            "required": ["old_text", "new_text"]
+          },
+          "minItems": 1
+        }
+      },
+      "required": ["path", "hunks"]
+    }
+  }
+}

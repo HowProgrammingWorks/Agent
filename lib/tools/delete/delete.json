@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "delete",
+    "description": "Delete one file in the workspace. Does not remove directories. Prefer over bash rm.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "File path relative to the workspace root."
+        }
+      },
+      "required": ["path"]
+    }
+  }
+}

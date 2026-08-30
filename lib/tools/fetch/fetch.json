@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "fetch",
+    "description": "HTTP GET an http(s) URL and return status plus truncated text body. Always requires approval. Not a search engine.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "http: or https: URL."
+        },
+        "max_chars": {
+          "type": "number",
+          "description": "Max body characters. Default 30000, hard cap 60000."
+        }
+      },
+      "required": ["url"]
+    }
+  }
+}

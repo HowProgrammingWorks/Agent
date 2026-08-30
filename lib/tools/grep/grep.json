@@ -1,0 +1,33 @@
+{
+  "type": "function",
+  "function": {
+    "name": "grep",
+    "description": "Search UTF-8 file contents with a JavaScript regex. Prefer over bash grep/rg. Skips node_modules, .git, dist, coverage, .cursor.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "JavaScript regex source (no /slashes/). Do not rely on the g flag."
+        },
+        "path": {
+          "type": "string",
+          "description": "File or directory relative to the workspace. Default ."
+        },
+        "glob": {
+          "type": "string",
+          "description": "Optional filename/path filter (same matcher as the glob tool)."
+        },
+        "ignore_case": {
+          "type": "boolean",
+          "description": "Case-insensitive match. Default false."
+        },
+        "max_matches": {
+          "type": "number",
+          "description": "Stop after this many matches. Default 50, hard cap 200."
+        }
+      },
+      "required": ["pattern"]
+    }
+  }
+}

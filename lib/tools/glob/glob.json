@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "glob",
+    "description": "Find files by name pattern (e.g. **/*.js). Prefer over bash find/ls. Skips node_modules, .git, dist, coverage, .cursor.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Glob pattern with *, **, and ? support."
+        },
+        "path": {
+          "type": "string",
+          "description": "Optional subdirectory relative to the workspace."
+        }
+      },
+      "required": ["pattern"]
+    }
+  }
+}

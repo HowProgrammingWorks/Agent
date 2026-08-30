@@ -2,7 +2,7 @@
   "type": "function",
   "function": {
     "name": "bash",
-    "description": "Run a shell command with the workspace as the current directory. Use for ls/find/grep, tests, builds, git status/diff, and other project commands.",
+    "description": "Run a shell command with the workspace as the current directory. Use for tests, builds, git, npm, and other project commands. Prefer grep, glob, read, write, edit, patch, and delete for workspace file work.",
     "parameters": {
       "type": "object",
       "properties": {

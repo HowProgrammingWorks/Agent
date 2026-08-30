@@ -2,13 +2,21 @@
   "type": "function",
   "function": {
     "name": "read",
-    "description": "Read a UTF-8 text file from the project workspace.",
+    "description": "Read a UTF-8 text file from the project workspace. Optional offset/limit return numbered line slices for large files.",
     "parameters": {
       "type": "object",
       "properties": {
         "path": {
           "type": "string",
           "description": "File path relative to the workspace root."
+        },
+        "offset": {
+          "type": "number",
+          "description": "1-based start line. Default 1."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Max lines to return. Default remaining lines, hard cap 2000."
         }
       },
       "required": ["path"]

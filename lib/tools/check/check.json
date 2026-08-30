@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "check",
+    "description": "Verify after edits. With path: node --check that file. Without path: npm run check if package.json defines scripts.check.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Optional workspace file to syntax-check with node --check."
+        }
+      },
+      "required": []
+    }
+  }
+}
