@@ -37,15 +37,10 @@ const DEFAULT_MAX_STEPS = 30;
 const USAGE_FILE = path.join(__dirname, 'lib', 'usage.md');
 const USAGE = fs.readFileSync(USAGE_FILE, 'utf8').trim();
 
-const resolveModel = () => {
-  const envModel = process.env.TINY_AGENT_MODEL;
-  return envModel || config.TINY_AGENT_MODEL || DEFAULT_MODEL;
-};
+const resolveModel = () => config.MODEL || DEFAULT_MODEL;
 
 const resolveApiKey = () => {
-  const fromEnv = process.env.GEMINI_API_KEY;
-  const fromConfig = config.GEMINI_API_KEY;
-  const raw = fromEnv || fromConfig || '';
+  const raw = config.API_KEY || '';
   return raw.trim();
 };
 
@@ -60,7 +55,7 @@ const resolveRoot = async (arg) => {
 
 const missingKey = () => {
   if (createdConfig) console.log(color.warn('Created config.js\n'));
-  console.log(color.error('GEMINI_API_KEY is not set.\n'));
+  console.log(color.error('API_KEY is not set.\n'));
   console.log(USAGE);
 };
 

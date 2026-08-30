@@ -6,8 +6,7 @@ npm start -- [project-root]
 
 Opens the terminal IDE (file tree, editor, shell, agent).
 The workspace is the given directory, or the current directory if omitted.
-Model and key come from config.js or GEMINI_API_KEY / TINY_AGENT_MODEL
-in the environment.
+Model and key come from config.js (MODEL, API_KEY).
 
 IDE keys:
 tab Cycle tree / editor / terminal / agent
@@ -34,12 +33,8 @@ node start.js ../my-project
 
 Config (config.js):
 Created automatically if missing.
-GEMINI_API_KEY Required: paste an AIza key between --- >8 ---
-Get a key: https://aistudio.google.com/apikey
-See README.md (Install). GEMINI_API_KEY in the environment also works.
-TINY_AGENT_MODEL Optional default model override
-TINY_AGENT_FALLBACK_MODELS Optional list used when the primary model returns 503
-
-Environment:
-GEMINI_API_KEY Overrides config.js
-TINY_AGENT_MODEL Overrides config.js
+API_KEY Required: paste an OpenAI-compatible API key
+Get a key: https://aistudio.google.com/apikey (Gemini example)
+See README.md.
+MODEL Optional default model
+FALLBACK_MODELS Optional list used when the primary model returns 503
