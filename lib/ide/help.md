@@ -17,7 +17,6 @@
 ## editor
 
 - `esc` close this screen
-- `l` line numbers (help / binary / truncated)
 - arrows / `pgup` / `pgdn` / `home` / `end` move
 - `ctrl+home` / `ctrl+end` file start / end
 - `shift+arrows` select · drag to copy

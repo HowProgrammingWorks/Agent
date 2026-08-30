@@ -14,7 +14,6 @@ click a pane to focus it; click a file to open it
 click ✕ in the title bar to quit
 click 🧠 in the title bar for help; ? from the tree
 f10 Quit
-l Toggle line numbers in help or other readonly editor content
 drag in the editor, terminal, or chat to copy text
 shift+arrows Select in the editor or chat input
 ctrl+c Copy selection in the editor or chat; quit from other panes
