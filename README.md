@@ -52,6 +52,9 @@ tools/{name}/       {name}.json + {name}.js
 - In a git repo, in-project write/edit/bash calls are
   auto-approved; outer paths still prompt
 - Step limit and tool-output truncation
+- Context budget: when the conversation grows past
+  `CONTEXT_TOKEN_BUDGET` estimated tokens, older tool results are
+  pruned to stubs while the recent ones stay intact
 
 ## Safety
 

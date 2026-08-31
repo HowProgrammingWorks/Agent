@@ -36,4 +36,6 @@ API_KEY Required: OpenAI-compatible API key
 BASE_URL Required: Chat Completions endpoint
 MODEL Required: default model
 FALLBACK_MODELS Optional list used when the primary model returns 503
+CONTEXT_TOKEN_BUDGET Optional estimated token budget for the agent
+context; older tool results are pruned to stubs past it (default 80000)
 See README.md.

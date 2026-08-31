@@ -32,6 +32,7 @@ const EVENT_HANDLERS = {
   assistant: (ide, event) => ide.chat.addAgent(event.text),
   tool: (ide, event) => ide.onToolStart(event),
   result: (ide, event) => ide.onToolResult(event),
+  prune: (ide, event) => ide.chat.addPrune(event),
 };
 
 const FOCUS_KEYS = {
