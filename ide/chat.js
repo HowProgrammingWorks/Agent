@@ -77,6 +77,12 @@ class Chat {
     this.push({ kind: 'step', text: label, tone: 'faint' });
   }
 
+  addPrune({ pruned }) {
+    const noun = pruned === 1 ? 'result' : 'results';
+    const label = `pruned ${pruned} older tool ${noun}`;
+    this.push({ kind: 'step', text: label, tone: 'faint' });
+  }
+
   addTool(name, args, argsText) {
     const label = toolLabel(name, args, argsText);
     this.push({

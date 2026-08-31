@@ -63,6 +63,7 @@ const launchIde = async (root) => {
   await startIde({
     maxSteps: DEFAULT_MAX_STEPS,
     model: config.MODEL,
+    contextBudget: config.CONTEXT_TOKEN_BUDGET,
   });
 };
 

@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const { isError, isHashObject, jsonParse } = require('metautil');
 
+const { DEFAULT_BUDGET, pruneMessages } = require('./context.js');
 const { registry } = require('./tools.js');
 
 const INSTRUCTIONS_FILE = path.join(__dirname, 'instructions.md');
@@ -96,6 +97,7 @@ const runAgent = async (options) => {
   const { task, provider, permissions } = options;
   const { maxSteps = 30, instructions = INSTRUCTIONS } = options;
   const { onEvent, priorMessages } = options;
+  const { contextBudget = DEFAULT_BUDGET } = options;
 
   const emit = async (type, data = {}) => {
     await onEvent?.({ type, ...data });
@@ -110,7 +112,12 @@ const runAgent = async (options) => {
 
     const loaded = [...registry.values()];
     const tools = loaded.map((tool) => tool.definition);
-    const response = await provider.respond({ messages, tools });
+    const request = pruneMessages(messages, contextBudget);
+    if (request.pruned > 0) await emit('prune', { pruned: request.pruned });
+    const response = await provider.respond({
+      messages: request.messages,
+      tools,
+    });
     const message = response.choices?.[0]?.message;
     if (!message) throw new Error('Model returned no message.');
 

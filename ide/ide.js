@@ -36,6 +36,7 @@ class Ide {
       ask: (description) => this.requestApproval(description),
     });
     this.maxSteps = options.maxSteps;
+    this.contextBudget = options.contextBudget;
     this.tree = new FileTree(workspace.root);
     this.editor = new Editor();
     this.terminal = new Terminal(workspace.root);
@@ -534,6 +535,7 @@ class Ide {
       const provider = this.provider;
       const permissions = this.permissions;
       const maxSteps = this.maxSteps;
+      const contextBudget = this.contextBudget;
       const priorMessages = this.messages;
       const onEvent = (event) => this.handleEvent(event);
       const result = await runAgent({
@@ -541,6 +543,7 @@ class Ide {
         provider,
         permissions,
         maxSteps,
+        contextBudget,
         onEvent,
         priorMessages,
       });
