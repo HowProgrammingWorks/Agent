@@ -4,14 +4,14 @@
 
 ## Run
 
-Node.js 20+ and an API key for any OpenAI-compatible Chat Completions provider ([Gemini](https://aistudio.google.com/apikey) is the example).
+Node.js 20+ and an API key for any OpenAI-compatible Chat Completions provider.
 
 ```bash
 npm install
 npm start
 ```
 
-First run copies `lib/config.template.js` to `config.js`. Put the key in `API_KEY` there. Open another directory with `npm start -- /my-project`.
+First run copies `agent/config.template.js` to `config.js`. Fill in `API_KEY`, `BASE_URL`, and `MODEL`. Open another directory with `npm start -- /my-project`.
 
 ## Loop
 
@@ -31,23 +31,20 @@ append tool results
 model response again
 ```
 
-Tools are `read`, `write`, `edit`, `bash`, `grep`, `glob`, `delete`, `patch`, `check`, `fetch`, and `todo`. Specs live in `lib/tools.md`. The LLM client is the OpenAI SDK; point it at any compatible endpoint.
+Tools are `read`, `write`, `edit`, `bash`, `grep`, `glob`, `delete`, `patch`, `check`, `fetch`, and `todo`. Specs live in `tools/{name}/{name}.json`. The LLM client is the OpenAI SDK; point it at any compatible endpoint.
 
 ```text
 start.js            terminal IDE
-lib/agent.js        tool loop
-lib/llm.js          OpenAI Chat Completions client
-lib/ide/            tree, editor, shell, chat
-lib/tools/{name}/   {name}.json + {name}.js
+agent/agent.js      tool loop
+agent/llm.js        OpenAI Chat Completions client
+ide/                tree, editor, shell, chat
+tools/{name}/       {name}.json + {name}.js
 ```
 
 - Agent loop
 - Set of tools
-- Any OpenAI-compatible provider (Gemini is only
-  the example in this repo, not a lock-in) via the
-  [OpenAI-compatible endpoint](https://ai.google.dev/gemini-api/
-  docs/openai)
-- Configurable model via `config.js`
+- Any OpenAI-compatible provider via `BASE_URL` in `config.js`
+- Configurable model via `MODEL` and `FALLBACK_MODELS`
 - File workspace containment checks, including symlink-aware
   checks
 - Interactive approval before writes, edits, and shell commands

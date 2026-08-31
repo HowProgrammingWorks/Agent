@@ -2,7 +2,7 @@
   "name": "tiny-agent-harness",
   "version": "0.1.0",
   "private": true,
-  "description": "A small modular agentic coding harness using Gemini via the OpenAI-compatible Chat Completions API.",
+  "description": "A small modular agentic coding harness using an OpenAI-compatible Chat Completions API.",
   "engines": {
     "node": ">=20"
   },

@@ -14,7 +14,7 @@ const color = concolor({
 });
 
 const CONFIG_PATH = path.join(__dirname, 'config.js');
-const TEMPLATE_PATH = path.join(__dirname, 'lib', 'config.template.js');
+const TEMPLATE_PATH = path.join(__dirname, 'agent', 'config.template.js');
 
 const ensureConfig = () => {
   if (fs.existsSync(CONFIG_PATH)) return false;
@@ -24,20 +24,14 @@ const ensureConfig = () => {
 
 const createdConfig = ensureConfig();
 
-const { errorText } = require('./lib/agent.js');
-const { startIde } = require('./lib/ide/ide.js');
-const { createGeminiProvider } = require('./lib/llm.js');
-const { createPermissions } = require('./lib/permissions.js');
-const { createToolRegistry } = require('./lib/registry.js');
-const { createWorkspace } = require('./lib/workspace.js');
+const { errorText } = require('./agent/agent.js');
+const { openWorkspace } = require('./agent/workspace.js');
+const { startIde } = require('./ide/ide.js');
 const config = require('./config.js');
 
-const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const DEFAULT_MAX_STEPS = 30;
-const USAGE_FILE = path.join(__dirname, 'lib', 'usage.md');
+const USAGE_FILE = path.join(__dirname, 'agent', 'usage.md');
 const USAGE = fs.readFileSync(USAGE_FILE, 'utf8').trim();
-
-const resolveModel = () => config.MODEL || DEFAULT_MODEL;
 
 const resolveApiKey = () => {
   const raw = config.API_KEY || '';
@@ -65,36 +59,11 @@ const launchIde = async (root) => {
     process.exitCode = 1;
     return;
   }
-
-  const workspace = await createWorkspace(root);
-  const askRef = { current: async () => false };
-  const loggerRef = { log: () => {} };
-  const permissions = createPermissions({
-    ask: (description) => askRef.current(description),
+  await openWorkspace(root);
+  await startIde({
+    maxSteps: DEFAULT_MAX_STEPS,
+    model: config.MODEL,
   });
-  const provider = createGeminiProvider({
-    model: resolveModel(),
-    logger: loggerRef,
-  });
-  const toolRegistry = await createToolRegistry();
-
-  try {
-    await startIde({
-      workspace,
-      provider,
-      toolRegistry,
-      permissions,
-      maxSteps: DEFAULT_MAX_STEPS,
-      bindAsk: (ask) => {
-        askRef.current = ask;
-      },
-      bindLogger: (log) => {
-        loggerRef.log = log;
-      },
-    });
-  } finally {
-    permissions.close();
-  }
 };
 
 const main = async () => {
@@ -103,14 +72,12 @@ const main = async () => {
     process.exitCode = 1;
     return;
   }
-
   const extra = process.argv.slice(2);
   if (extra.length > 1) {
     console.log(color.error('Usage: node start.js [project-root]'));
     process.exitCode = 1;
     return;
   }
-
   const root = await resolveRoot(extra[0]);
   await launchIde(root);
 };

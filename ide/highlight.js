@@ -1,0 +1,450 @@
+'use strict';
+
+const { colors } = require('./tui.js');
+const { text, bright, faint, muted, green } = colors.foreground;
+const { yellow, purple, cyan, orange, blue } = colors.foreground;
+
+const JS_EXTS = ['js', 'cjs', 'mjs', 'ts', 'mts', 'cts', 'json'];
+const MD_EXTS = ['md', 'markdown', 'mdx'];
+
+const FENCE_LANG = {
+  js: 'js',
+  javascript: 'js',
+  node: 'js',
+  mjs: 'mjs',
+  cjs: 'cjs',
+  ts: 'ts',
+  typescript: 'ts',
+  mts: 'mts',
+  cts: 'cts',
+  json: 'json',
+};
+
+const FENCE_RE = /^(\s*)(`{3,}|~{3,})(.*)$/;
+const HEADING_RE = /^(#{1,6})(\s+)(.*)$/;
+const SETEXT_H1 = /^=+\s*$/;
+const SETEXT_H2 = /^-{2,}\s*$/;
+const HR_RE = /^(\s*)(\*{3,}|-{3,}|_{3,})\s*$/;
+const UL_RE = /^(\s*)([-*+])(\s+)(.*)$/;
+const OL_RE = /^(\s*)(\d+[.)])(\s+)(.*)$/;
+const TASK_RE = /^(\[[ xX]\])(\s*)(.*)$/;
+const QUOTE_RE = /^((?:>\s?)+)(.*)$/;
+const TABLE_RE = /^\s*\|/;
+const INLINE_RE =
+  /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|!?\[[^\]]+\]\([^)]+\))/g;
+
+const QUOTES = '"\'`';
+const NUMBER_PART = '0123456789_';
+
+const STORAGE = ['const', 'let', 'var', 'function'];
+
+const KEYWORDS = [
+  'async',
+  'await',
+  'break',
+  'case',
+  'catch',
+  'class',
+  'continue',
+  'debugger',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'export',
+  'extends',
+  'false',
+  'finally',
+  'for',
+  'from',
+  'if',
+  'import',
+  'in',
+  'instanceof',
+  'new',
+  'null',
+  'of',
+  'return',
+  'static',
+  'super',
+  'switch',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'typeof',
+  'undefined',
+  'void',
+  'while',
+  'with',
+  'yield',
+  'require',
+  'module',
+  'exports',
+];
+
+const WORD_COLOR = Object.create(null);
+for (const word of STORAGE) WORD_COLOR[word] = cyan;
+for (const word of KEYWORDS) WORD_COLOR[word] = purple;
+
+const isSetextH1 = (s) => s !== undefined && SETEXT_H1.test(s);
+const isSetextH2 = (s) => s !== undefined && SETEXT_H2.test(s);
+const isSetext = (s) => isSetextH1(s) || isSetextH2(s);
+
+const isIdentStart = (ch) => {
+  if (ch === '_' || ch === '$') return true;
+  return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
+};
+
+const isIdentPart = (ch) => {
+  if (isIdentStart(ch)) return true;
+  return ch >= '0' && ch <= '9';
+};
+
+const isDigit = (ch) => ch >= '0' && ch <= '9';
+const isNumberPart = (ch) => NUMBER_PART.includes(ch);
+
+const readString = (line, start) => {
+  const quote = line[start];
+  let index = start + 1;
+  while (index < line.length) {
+    const ch = line[index];
+    if (ch === '\\') {
+      index += 2;
+      continue;
+    }
+    if (ch === quote) {
+      const end = index + 1;
+      const text = line.slice(start, end);
+      return { text, end };
+    }
+    index += 1;
+  }
+  const text = line.slice(start);
+  const end = line.length;
+  return { text, end };
+};
+
+const readWhile = (line, start, isPart) => {
+  let end = start + 1;
+  while (end < line.length && isPart(line[end])) end += 1;
+  const text = line.slice(start, end);
+  return { text, end };
+};
+
+const readBlockComment = (line, start, from) => {
+  const close = line.indexOf('*/', from);
+  if (close < 0) {
+    const text = line.slice(start);
+    const end = line.length;
+    return { text, end, inBlock: true };
+  }
+  const end = close + 2;
+  const text = line.slice(start, end);
+  return { text, end, inBlock: false };
+};
+
+const pushSpan = (spans, value, color) => {
+  if (!value) return;
+  const last = spans.at(-1);
+  if (last && last.color === color) {
+    last.text += value;
+    return;
+  }
+  spans.push({ text: value, color });
+};
+
+const wordColor = (word) => WORD_COLOR[word] ?? text;
+
+const tokenizeJsLine = (line, inBlock) => {
+  const spans = [];
+  let index = 0;
+  let block = inBlock;
+
+  if (block) {
+    const taken = readBlockComment(line, 0, 0);
+    pushSpan(spans, taken.text, faint);
+    if (taken.inBlock) return { spans, inBlock: true };
+    index = taken.end;
+    block = false;
+  }
+
+  while (index < line.length) {
+    if (line.startsWith('//', index)) {
+      pushSpan(spans, line.slice(index), faint);
+      break;
+    }
+    if (line.startsWith('/*', index)) {
+      const taken = readBlockComment(line, index, index + 2);
+      pushSpan(spans, taken.text, faint);
+      if (taken.inBlock) {
+        block = true;
+        break;
+      }
+      index = taken.end;
+      continue;
+    }
+    const ch = line[index];
+    if (QUOTES.includes(ch)) {
+      const taken = readString(line, index);
+      pushSpan(spans, taken.text, green);
+      index = taken.end;
+      continue;
+    }
+    if (isIdentStart(ch)) {
+      const taken = readWhile(line, index, isIdentPart);
+      const word = taken.text;
+      pushSpan(spans, word, wordColor(word));
+      index = taken.end;
+      continue;
+    }
+    if (isDigit(ch)) {
+      const taken = readWhile(line, index, isNumberPart);
+      pushSpan(spans, taken.text, yellow);
+      index = taken.end;
+      continue;
+    }
+    pushSpan(spans, ch, text);
+    index += 1;
+  }
+
+  if (spans.length === 0) pushSpan(spans, '', text);
+  return { spans, inBlock: block };
+};
+
+const plainLine = (line) => [{ text: line, color: text }];
+
+const headingColor = (level) => {
+  if (level <= 1) return bright;
+  if (level === 2) return cyan;
+  return purple;
+};
+
+const fenceLangOf = (info) => {
+  const lang = info.trim().split(/\s+/)[0].toLowerCase();
+  const mapped = FENCE_LANG[lang] || lang;
+  return JS_EXTS.includes(mapped) ? mapped : '';
+};
+
+const pushInline = (spans, raw, base = text) => {
+  const source = raw ?? '';
+  INLINE_RE.lastIndex = 0;
+  let last = 0;
+  let match = INLINE_RE.exec(source);
+  while (match) {
+    if (match.index > last) {
+      pushSpan(spans, source.slice(last, match.index), base);
+    }
+    const token = match[0];
+    if (token.startsWith('`')) {
+      pushSpan(spans, '`', faint);
+      pushSpan(spans, token.slice(1, -1), yellow);
+      pushSpan(spans, '`', faint);
+    } else if (token.startsWith('**') || token.startsWith('__')) {
+      const mark = token.slice(0, 2);
+      pushSpan(spans, mark, faint);
+      pushSpan(spans, token.slice(2, -2), bright);
+      pushSpan(spans, mark, faint);
+    } else if (token.startsWith('[') || token.startsWith('![')) {
+      const link = token.match(/^(!?)\[([^\]]+)\]\(([^)]+)\)$/);
+      if (link) {
+        pushSpan(spans, `${link[1]}[`, faint);
+        pushSpan(spans, link[2], cyan);
+        pushSpan(spans, '](', faint);
+        pushSpan(spans, link[3], blue);
+        pushSpan(spans, ')', faint);
+      } else {
+        pushSpan(spans, token, base);
+      }
+    } else {
+      const mark = token[0];
+      pushSpan(spans, mark, faint);
+      pushSpan(spans, token.slice(1, -1), purple);
+      pushSpan(spans, mark, faint);
+    }
+    last = match.index + token.length;
+    match = INLINE_RE.exec(source);
+  }
+  if (last < source.length) pushSpan(spans, source.slice(last), base);
+};
+
+const tokenizeMdFenceOpen = (line, match) => {
+  const spans = [];
+  pushSpan(spans, match[1], faint);
+  pushSpan(spans, match[2], muted);
+  const info = match[3] ?? '';
+  const lang = info.trim().split(/\s+/)[0];
+  const at = lang ? info.indexOf(lang) : -1;
+  const lead = at >= 0 ? info.slice(0, at) : info;
+  const rest = at >= 0 ? info.slice(at + lang.length) : info;
+  pushSpan(spans, lead, faint);
+  pushSpan(spans, lang, cyan);
+  pushSpan(spans, rest, faint);
+  if (spans.length === 0) pushSpan(spans, line, faint);
+  return { spans, lang: fenceLangOf(info), mark: match[2] };
+};
+
+const tokenizeMdTable = (line) => {
+  const spans = [];
+  const parts = line.split('|');
+  for (let index = 0; index < parts.length; index += 1) {
+    if (index > 0) pushSpan(spans, '|', faint);
+    const cell = parts[index];
+    if (/^\s*:?-{2,}:?\s*$/.test(cell)) pushSpan(spans, cell, faint);
+    else pushInline(spans, cell);
+  }
+  if (spans.length === 0) pushSpan(spans, line, text);
+  return spans;
+};
+
+const tokenizeMdLine = (line, prev, next, fence) => {
+  if (fence) {
+    const close = line.match(FENCE_RE);
+    const same = close && close[2][0] === fence.mark[0];
+    const longEnough = close && close[2].length >= fence.mark.length;
+    if (same && longEnough) {
+      const opened = tokenizeMdFenceOpen(line, close);
+      return { spans: opened.spans, fence: null, jsBlock: false };
+    }
+    if (fence.lang) {
+      const result = tokenizeJsLine(line, fence.jsBlock);
+      return {
+        spans: result.spans,
+        fence: { ...fence, jsBlock: result.inBlock },
+      };
+    }
+    return { spans: [{ text: line, color: muted }], fence };
+  }
+
+  const open = line.match(FENCE_RE);
+  if (open) {
+    const opened = tokenizeMdFenceOpen(line, open);
+    return {
+      spans: opened.spans,
+      fence: { mark: opened.mark, lang: opened.lang, jsBlock: false },
+    };
+  }
+
+  if (line.trim().startsWith('<!--')) {
+    const spans = [];
+    pushSpan(spans, line, faint);
+    return { spans, fence: null };
+  }
+
+  const heading = line.match(HEADING_RE);
+  if (heading) {
+    const spans = [];
+    const color = headingColor(heading[1].length);
+    pushSpan(spans, heading[1], orange);
+    pushSpan(spans, heading[2], color);
+    pushInline(spans, heading[3], color);
+    return { spans, fence: null };
+  }
+
+  const hasText = line.trim() !== '';
+  const notAtx = !HEADING_RE.test(line);
+  const notFence = !FENCE_RE.test(line);
+  const setextNext = hasText && isSetext(next) && notAtx && notFence;
+  if (setextNext) {
+    const spans = [];
+    const color = headingColor(isSetextH1(next) ? 1 : 2);
+    pushInline(spans, line, color);
+    return { spans, fence: null };
+  }
+
+  const prevText = prev.trim() !== '';
+  const prevNotAtx = prev !== '' && !HEADING_RE.test(prev);
+  const setextHere = prevText && prevNotAtx && isSetext(line);
+  if (setextHere) {
+    const color = headingColor(isSetextH1(line) ? 1 : 2);
+    return { spans: [{ text: line, color }], fence: null };
+  }
+
+  if (HR_RE.test(line)) {
+    return { spans: [{ text: line, color: faint }], fence: null };
+  }
+
+  const quote = line.match(QUOTE_RE);
+  if (quote) {
+    const spans = [];
+    pushSpan(spans, quote[1], green);
+    pushInline(spans, quote[2]);
+    return { spans, fence: null };
+  }
+
+  const ul = line.match(UL_RE);
+  if (ul) {
+    const spans = [];
+    pushSpan(spans, ul[1], text);
+    pushSpan(spans, ul[2], cyan);
+    pushSpan(spans, ul[3], text);
+    const task = ul[4].match(TASK_RE);
+    if (task) {
+      const done = /[xX]/.test(task[1]);
+      pushSpan(spans, task[1], done ? green : muted);
+      pushSpan(spans, task[2], text);
+      pushInline(spans, task[3]);
+    } else {
+      pushInline(spans, ul[4]);
+    }
+    return { spans, fence: null };
+  }
+
+  const ol = line.match(OL_RE);
+  if (ol) {
+    const spans = [];
+    pushSpan(spans, ol[1], text);
+    pushSpan(spans, ol[2], cyan);
+    pushSpan(spans, ol[3], text);
+    pushInline(spans, ol[4]);
+    return { spans, fence: null };
+  }
+
+  if (TABLE_RE.test(line)) {
+    const spans = tokenizeMdTable(line);
+    return { spans, fence: null };
+  }
+
+  const spans = [];
+  pushInline(spans, line);
+  if (spans.length === 0) pushSpan(spans, '', text);
+  return { spans, fence: null };
+};
+
+const highlightJs = (lines) => {
+  const rows = new Array(lines.length);
+  let inBlock = false;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const result = tokenizeJsLine(line, inBlock);
+    inBlock = result.inBlock;
+    rows[index] = result.spans;
+  }
+  return rows;
+};
+
+const highlightMd = (lines) => {
+  const rows = new Array(lines.length);
+  let fence = null;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const prev = index > 0 ? lines[index - 1] : '';
+    const next = lines[index + 1];
+    const result = tokenizeMdLine(line, prev, next, fence);
+    fence = result.fence;
+    if (result.spans.length === 0) rows[index] = plainLine(line);
+    else rows[index] = result.spans;
+  }
+  return rows;
+};
+
+const highlightSource = (source, ext) => {
+  const lines = source.split('\n');
+  if (lines.length === 0) return [plainLine('')];
+  const kind = (ext || '').toLowerCase();
+  if (JS_EXTS.includes(kind)) return highlightJs(lines);
+  if (MD_EXTS.includes(kind)) return highlightMd(lines);
+  return lines.map(plainLine);
+};
+
+module.exports = { highlightSource };
