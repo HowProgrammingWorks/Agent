@@ -6,7 +6,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const concolor = require('concolor');
-const { directoryExists, exists } = require('metautil');
 
 const color = concolor({
   warn: 'b,yellow',
@@ -25,7 +24,7 @@ const ensureConfig = () => {
 const createdConfig = ensureConfig();
 
 const { errorText } = require('./agent/agent.js');
-const { openWorkspace } = require('./agent/workspace.js');
+const { workspace } = require('./agent/workspace.js');
 const { startIde } = require('./ide/ide.js');
 const config = require('./config.js');
 
@@ -38,32 +37,10 @@ const resolveApiKey = () => {
   return raw.trim();
 };
 
-const resolveRoot = async (arg) => {
-  const root = path.resolve(arg || process.cwd());
-  const found = await exists(root);
-  if (!found) throw new Error(`Not found: ${root}`);
-  const isDir = await directoryExists(root);
-  if (!isDir) throw new Error(`Not a directory: ${root}`);
-  return root;
-};
-
 const missingKey = () => {
   if (createdConfig) console.log(color.warn('Created config.js\n'));
   console.log(color.error('API_KEY is not set.\n'));
   console.log(USAGE);
-};
-
-const launchIde = async (root) => {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    console.log(color.error('IDE needs an interactive terminal.'));
-    process.exitCode = 1;
-    return;
-  }
-  await openWorkspace(root);
-  await startIde({
-    maxSteps: DEFAULT_MAX_STEPS,
-    model: config.MODEL,
-  });
 };
 
 const main = async () => {
@@ -72,14 +49,16 @@ const main = async () => {
     process.exitCode = 1;
     return;
   }
-  const extra = process.argv.slice(2);
-  if (extra.length > 1) {
-    console.log(color.error('Usage: node start.js [project-root]'));
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.log(color.error('IDE needs an interactive terminal.'));
     process.exitCode = 1;
     return;
   }
-  const root = await resolveRoot(extra[0]);
-  await launchIde(root);
+  await workspace.init();
+  await startIde({
+    maxSteps: DEFAULT_MAX_STEPS,
+    model: config.MODEL,
+  });
 };
 
 main().catch((error) => {

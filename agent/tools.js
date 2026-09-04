@@ -3,8 +3,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { isHashObject } = require('metautil');
+const { bytesToSize, isHashObject } = require('metautil');
 
+const command = require('./command.js');
 const globmatch = require('./globmatch.js');
 const textfile = require('./textfile.js');
 const { walkFiles } = require('./walk.js');
@@ -12,31 +13,44 @@ const { workspace } = require('./workspace.js');
 
 const TOOLS_DIR = path.join(__dirname, '..', 'tools');
 
-const environment = {
-  api: { ...globmatch, ...textfile },
+const api = {
+  ...globmatch,
+  ...textfile,
+  ...command,
   walkFiles,
-  workspace,
+  bytesToSize,
+  isHashObject,
 };
 
-const isTool = (value) => {
-  if (!isHashObject(value)) return false;
-  return typeof value.execute === 'function';
+const environment = { api, workspace };
+
+const PLACEHOLDER = /\{([a-z0-9_]+)\}/gi;
+
+const interpolate = (template, args) => {
+  const filled = template.replace(PLACEHOLDER, (_match, key) => {
+    if (!Object.hasOwn(args, key)) return '';
+    const value = args[key];
+    if (value === undefined || value === null) return '';
+    if (Array.isArray(value)) return `${value.length}`;
+    return `${value}`;
+  });
+  return filled.trim();
 };
 
-const isFactory = (value) => typeof value === 'function';
-
-const asTrust = (trust) => {
-  if (typeof trust === 'function') return trust;
-  return () => trust;
-};
-
-const normalizeTool = (tool, definition) => {
+const normalizeTool = (execute, spec) => {
+  const definition = { type: spec.type, function: spec.function };
   const name = definition.function.name;
-  const needsApproval = tool.needsApproval === true;
-  const trust = asTrust(tool.trust ?? 'always');
-  const describe = tool.describe ?? (() => name);
-  const execute = (args) => tool.execute(args);
-  return { needsApproval, trust, describe, execute, definition };
+  const needsApproval = spec.needsApproval === true;
+  const kind = spec.trust ?? 'always';
+  const trust = () => kind;
+  const template = spec.describe;
+  const describe = (args) => {
+    if (typeof template !== 'string' || template.length === 0) return name;
+    const text = interpolate(template, args);
+    return text || name;
+  };
+  const run = (args) => execute(args, environment);
+  return { needsApproval, trust, describe, execute: run, definition };
 };
 
 const loadTool = (dirent) => {
@@ -46,13 +60,10 @@ const loadTool = (dirent) => {
   const jsonPath = path.join(TOOLS_DIR, name, `${name}.json`);
   if (!fs.existsSync(jsPath)) return null;
   if (!fs.existsSync(jsonPath)) return null;
-  const exported = require(jsPath);
-  const factory = Object.values(exported).find(isFactory);
-  if (!factory) return null;
-  const tool = factory(environment);
-  if (!isTool(tool)) return null;
-  const definition = require(jsonPath);
-  return normalizeTool(tool, definition);
+  const execute = require(jsPath);
+  if (typeof execute !== 'function') return null;
+  const spec = require(jsonPath);
+  return normalizeTool(execute, spec);
 };
 
 const dirents = fs.readdirSync(TOOLS_DIR, { withFileTypes: true });
