@@ -1,4 +1,6 @@
 {
+  "needsApproval": false,
+  "trust": "always",
   "type": "function",
   "function": {
     "name": "todo",

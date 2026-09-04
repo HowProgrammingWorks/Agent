@@ -22,14 +22,28 @@ const resolveMaxMatches = (value) => {
   return Math.min(max, HARD_MAX);
 };
 
-const grepTool = (environment) => {
-  const { api, walkFiles, workspace } = environment;
-  const { matchGlob, readTextFile, truncateOutput } = api;
+module.exports = async (args, environment) => {
+  const { api, workspace } = environment;
+  const pattern = args.pattern;
+  if (typeof pattern !== 'string' || pattern.length === 0) {
+    throw new Error('pattern must be a non-empty string.');
+  }
+  const ignoreCase = args.ignore_case === true;
+  const regex = compilePattern(pattern, ignoreCase);
+  const maxMatches = resolveMaxMatches(args.max_matches);
+  const globFilter = args.glob;
+  if (globFilter !== undefined && typeof globFilter !== 'string') {
+    throw new Error('glob must be a string.');
+  }
 
-  const grepFile = async (absPath, relPath, regex, lines, maxMatches) => {
+  const target = await workspace.resolveExistingPath(args.path ?? '.');
+  const lines = [];
+  let truncated = false;
+
+  const grepFile = async (absPath, relPath) => {
     let content;
     try {
-      content = await readTextFile(absPath);
+      content = await api.readTextFile(absPath);
     } catch {
       // ignore unreadable or binary files
       return false;
@@ -45,52 +59,28 @@ const grepTool = (environment) => {
     return false;
   };
 
-  return {
-    needsApproval: false,
-    trust: 'path',
-    async execute(args) {
-      const pattern = args.pattern;
-      if (typeof pattern !== 'string' || pattern.length === 0) {
-        throw new Error('pattern must be a non-empty string.');
-      }
-      const ignoreCase = args.ignore_case === true;
-      const regex = compilePattern(pattern, ignoreCase);
-      const maxMatches = resolveMaxMatches(args.max_matches);
-      const globFilter = args.glob;
-      if (globFilter !== undefined && typeof globFilter !== 'string') {
-        throw new Error('glob must be a string.');
-      }
-
-      const target = await workspace.resolveExistingPath(args.path ?? '.');
-      const lines = [];
-      let truncated = false;
-
-      const consider = async (absPath, relPath) => {
-        if (globFilter && !matchGlob(relPath, globFilter)) return false;
-        const full = await grepFile(absPath, relPath, regex, lines, maxMatches);
-        if (full) truncated = true;
-        return full;
-      };
-
-      if (target.isFile) {
-        const relFromRoot = path.relative(workspace.root, target.path);
-        const rel = relFromRoot || path.basename(target.path);
-        const posixRel = rel.replaceAll('\\', '/');
-        await consider(target.path, posixRel);
-      } else if (target.isDirectory) {
-        const fromRoot = path.relative(workspace.root, target.path);
-        const baseRel = fromRoot.replaceAll('\\', '/') || '';
-        await walkFiles(target.path, baseRel, consider);
-      } else {
-        throw new Error(`Not a file or directory: ${args.path ?? '.'}`);
-      }
-
-      if (lines.length === 0) return 'No matches.';
-      const body = lines.join('\n');
-      const note = truncated ? `\n... stopped after ${maxMatches} matches` : '';
-      return truncateOutput(body + note);
-    },
+  const consider = async (absPath, relPath) => {
+    if (globFilter && !api.matchGlob(relPath, globFilter)) return false;
+    const full = await grepFile(absPath, relPath);
+    if (full) truncated = true;
+    return full;
   };
-};
 
-module.exports = { grepTool };
+  if (target.isFile) {
+    const relFromRoot = path.relative(workspace.root, target.path);
+    const rel = relFromRoot || path.basename(target.path);
+    const posixRel = rel.replaceAll('\\', '/');
+    await consider(target.path, posixRel);
+  } else if (target.isDirectory) {
+    const fromRoot = path.relative(workspace.root, target.path);
+    const baseRel = fromRoot.replaceAll('\\', '/') || '';
+    await api.walkFiles(target.path, baseRel, consider);
+  } else {
+    throw new Error(`Not a file or directory: ${args.path ?? '.'}`);
+  }
+
+  if (lines.length === 0) return 'No matches.';
+  const body = lines.join('\n');
+  const note = truncated ? `\n... stopped after ${maxMatches} matches` : '';
+  return api.truncateOutput(body + note);
+};

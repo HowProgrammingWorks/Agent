@@ -45,37 +45,28 @@ const fetchWithTimeout = async (urlText, signal) => {
   }
 };
 
-const fetchTool = () => ({
-  needsApproval: true,
-  trust: 'always',
-  describe(args) {
-    return `fetch ${args.url}`;
-  },
-  async execute(args) {
-    const urlText = args.url;
-    if (typeof urlText !== 'string' || urlText.length === 0) {
-      throw new Error('url must be a non-empty string.');
-    }
-    assertHttpUrl(urlText);
-    const maxChars = resolveMaxChars(args.max_chars);
+module.exports = async (args) => {
+  const urlText = args.url;
+  if (typeof urlText !== 'string' || urlText.length === 0) {
+    throw new Error('url must be a non-empty string.');
+  }
+  assertHttpUrl(urlText);
+  const maxChars = resolveMaxChars(args.max_chars);
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    try {
-      const response = await fetchWithTimeout(urlText, controller.signal);
-      const finalUrl = response.url || urlText;
-      assertHttpUrl(finalUrl);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetchWithTimeout(urlText, controller.signal);
+    const finalUrl = response.url || urlText;
+    assertHttpUrl(finalUrl);
 
-      const body = await response.text();
-      const header = `status: ${response.status}\nurl: ${finalUrl}\n\n`;
-      if (body.length <= maxChars) return `${header}${body}`;
-      const clipped = body.slice(0, maxChars);
-      const note = `\n...[body truncated at ${maxChars} chars]`;
-      return `${header}${clipped}${note}`;
-    } finally {
-      clearTimeout(timer);
-    }
-  },
-});
-
-module.exports = { fetchTool };
+    const body = await response.text();
+    const header = `status: ${response.status}\nurl: ${finalUrl}\n\n`;
+    if (body.length <= maxChars) return `${header}${body}`;
+    const clipped = body.slice(0, maxChars);
+    const note = `\n...[body truncated at ${maxChars} chars]`;
+    return `${header}${clipped}${note}`;
+  } finally {
+    clearTimeout(timer);
+  }
+};

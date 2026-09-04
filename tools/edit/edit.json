@@ -1,4 +1,7 @@
 {
+  "needsApproval": true,
+  "trust": "path",
+  "describe": "edit {path}",
   "type": "function",
   "function": {
     "name": "edit",

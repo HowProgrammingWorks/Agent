@@ -1,4 +1,7 @@
 {
+  "needsApproval": true,
+  "trust": "always",
+  "describe": "fetch {url}",
   "type": "function",
   "function": {
     "name": "fetch",

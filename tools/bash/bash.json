@@ -1,4 +1,7 @@
 {
+  "needsApproval": true,
+  "trust": "command",
+  "describe": "run shell command: {command}",
   "type": "function",
   "function": {
     "name": "bash",

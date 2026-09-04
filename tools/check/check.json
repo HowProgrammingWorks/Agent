@@ -1,4 +1,7 @@
 {
+  "needsApproval": true,
+  "trust": "path",
+  "describe": "check {path}",
   "type": "function",
   "function": {
     "name": "check",
