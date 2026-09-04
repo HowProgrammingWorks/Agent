@@ -162,6 +162,7 @@ const isWide = (cp) => {
 
 const graphemeWidth = (g) => {
   if (!g) return 0;
+  if (g.includes('\uFE0F')) return 2;
   if (/\p{Extended_Pictographic}/u.test(g)) return 2;
   if (/\p{Emoji_Presentation}/u.test(g)) return 2;
   let width = 0;
@@ -175,12 +176,18 @@ const graphemeWidth = (g) => {
 
 const graphemesOf = (value) => {
   const out = [];
-  let afterVs16 = false;
   for (const { segment } of GRAPHEME.segment(`${value ?? ''}`)) {
-    let w = graphemeWidth(segment);
-    if (afterVs16 && segment === ' ') w = 0;
-    out.push({ g: segment, w });
-    afterVs16 = segment.includes('\uFE0F');
+    if (segment === '\uFE0F' || segment === '\uFE0E') {
+      const prev = out[out.length - 1];
+      if (!prev) continue;
+      prev.g += segment;
+      if (segment === '\uFE0F') prev.w = 2;
+      continue;
+    }
+    const prev = out[out.length - 1];
+    const padAfterEmoji = segment === ' ' && prev && prev.g.includes('\uFE0F');
+    if (padAfterEmoji) continue;
+    out.push({ g: segment, w: graphemeWidth(segment) });
   }
   return out;
 };
@@ -261,6 +268,7 @@ const DEFAULT_BG = colors.background.header;
 let grid = [];
 let screenCols = 0;
 let screenRows = 0;
+let cuts = [];
 let painting = false;
 let displayActive = false;
 
@@ -290,6 +298,27 @@ const ensureGrid = (cols, rows) => {
     for (let x = 0; x < cols; x += 1) row[x] = emptyCell();
     grid[y] = row;
   }
+  cuts = Array.from({ length: rows }, () => []);
+};
+
+const clearCuts = () => {
+  for (let y = 0; y < screenRows; y += 1) cuts[y].length = 0;
+};
+
+const markCut = (x, y) => {
+  if (y < 0 || y >= screenRows) return;
+  const col = Math.max(0, x);
+  cuts[y].push(col);
+};
+
+const rowCuts = (y, cols) => {
+  const seen = new Set([0, cols]);
+  for (const x of cuts[y]) {
+    if (x > 0 && x < cols) seen.add(x);
+  }
+  const list = [...seen];
+  list.sort((a, b) => a - b);
+  return list;
 };
 
 const clearGrid = () => {
@@ -297,6 +326,7 @@ const clearGrid = () => {
     const row = grid[y];
     for (let x = 0; x < screenCols; x += 1) resetCell(row[x]);
   }
+  clearCuts();
 };
 
 const putGlyph = (x, y, g, w, bg, fg, bold) => {
@@ -307,6 +337,7 @@ const putGlyph = (x, y, g, w, bg, fg, bold) => {
   const row = grid[y];
   let width = w;
   let glyph = g;
+  if (glyph.includes('\uFE0F') && width < 2) width = 2;
   if (width > 1 && x + width > screenCols) {
     width = 1;
     glyph = ' ';
@@ -406,21 +437,16 @@ const plotAnsi = (x, y, value) => {
   }
 };
 
-// Place every glyph with CUP so wcwidth mismatch cannot shift later cells.
-const flushRow = (parts, y, row, cols) => {
+const flushRun = (parts, y, row, from, to) => {
   const rowNum = y + 1;
+  parts.push(`${ESC}${rowNum};${from + 1}H`);
   let lastBg = null;
   let lastFg = null;
   let lastBold = null;
-  for (let x = 0; x < cols; x += 1) {
+  for (let x = from; x < to; x += 1) {
     const cell = row[x];
-    let glyph = cell.g;
-    if (cell.w === 0) {
-      const head = x > 0 ? row[x - 1] : null;
-      if (head && head.w === 2) continue;
-      glyph ||= ' ';
-    }
-    parts.push(`${ESC}${rowNum};${x + 1}H`);
+    if (x > 0 && row[x - 1].w === 2) continue;
+    if (cell.w === 0) continue;
     const sameBg = cell.bg === lastBg;
     const sameFg = cell.fg === lastFg;
     const sameWeight = cell.bold === lastBold;
@@ -433,9 +459,25 @@ const flushRow = (parts, y, row, cols) => {
       lastFg = cell.fg;
       lastBold = cell.bold;
     }
-    parts.push(glyph || ' ');
+    parts.push(cell.g || ' ');
+    if (cell.w < 2) continue;
+    const next = x + cell.w;
+    if (next >= to) continue;
+    parts.push(`${ESC}${rowNum};${next + 1}H`);
   }
   parts.push(RESET);
+};
+
+// Stream between write() columns so a 2-cell emoji is not followed by CUP
+// onto its second cell (that prints the next letter over the icon).
+const flushRow = (parts, y, row, cols) => {
+  const marks = rowCuts(y, cols);
+  for (let index = 0; index < marks.length - 1; index += 1) {
+    const from = marks[index];
+    const to = marks[index + 1];
+    if (from >= to) continue;
+    flushRun(parts, y, row, from, to);
+  }
 };
 
 const writeTty = (value) => {
@@ -448,6 +490,7 @@ const writeTty = (value) => {
 
 const write = (x, y, value) => {
   if (painting) {
+    markCut(x, y);
     plotAnsi(x, y, value);
     return;
   }
@@ -495,6 +538,7 @@ const resetDisplay = () => {
   displayActive = false;
   painting = false;
   grid = [];
+  cuts = [];
   screenCols = 0;
   screenRows = 0;
   const restore = [

@@ -6,7 +6,7 @@ const path = require('node:path');
 const { fileExt } = require('metautil');
 
 const { isSkippedName } = require('../agent/walk.js');
-const { clamp } = require('./tui.js');
+const { clamp, textWidth } = require('./tui.js');
 
 const MAX_TREE_NODES = 4000;
 
@@ -111,10 +111,10 @@ const isLicenseName = (name) => {
   return LICENSE_NAMES.includes(stem);
 };
 
-const padIconGap = (icon) => {
-  if (icon.endsWith(' ')) return icon;
-  if (icon.includes('\uFE0F')) return `${icon} `;
-  return icon;
+const fitIcon = (icon) => {
+  const out = icon.replace(/ +$/u, '');
+  if (textWidth(out) >= 2) return out;
+  return `${out} `;
 };
 
 const extOf = (name) => (name.includes('.') ? fileExt(name) : '');
@@ -122,21 +122,21 @@ const extOf = (name) => (name.includes('.') ? fileExt(name) : '');
 const nodeIcon = (node, open) => {
   if (node.isDir) {
     const shown = open ?? node.expanded;
-    return padIconGap(shown ? '📂' : '📁');
+    return fitIcon(shown ? '📂' : '📁');
   }
-  if (isLicenseName(node.name)) return padIconGap('⚖️ ');
-  if (NAME_EMOJI[node.name]) return padIconGap(NAME_EMOJI[node.name]);
+  if (isLicenseName(node.name)) return fitIcon('⚖️');
+  if (NAME_EMOJI[node.name]) return fitIcon(NAME_EMOJI[node.name]);
   if (node.name.startsWith('.')) {
-    if (node.name.startsWith('.env')) return padIconGap('🔐');
-    if (node.name.startsWith('.git')) return padIconGap('🙈');
-    return padIconGap('⚫');
+    if (node.name.startsWith('.env')) return fitIcon('🔐');
+    if (node.name.startsWith('.git')) return fitIcon('🙈');
+    return fitIcon('⚫');
   }
   const ext = extOf(node.name);
   const badge = BADGES[ext];
   if (badge) return badge.label;
-  if (FILE_EMOJI[ext]) return padIconGap(FILE_EMOJI[ext]);
-  if (!ext) return padIconGap('📃');
-  return padIconGap('📄');
+  if (FILE_EMOJI[ext]) return fitIcon(FILE_EMOJI[ext]);
+  if (!ext) return fitIcon('📃');
+  return fitIcon('📄');
 };
 
 const nodeIconTone = (node) => {
