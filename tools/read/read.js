@@ -19,28 +19,21 @@ const resolveLimit = (value, remaining) => {
   return limit;
 };
 
-const readFileTool = (environment) => {
+module.exports = async (args, environment) => {
   const { api, workspace } = environment;
-  const { formatNumberedLines, readTextFile } = api;
-  return {
-    needsApproval: false,
-    trust: 'path',
-    async execute(args) {
-      const relativePath = args.path;
-      const offset = resolveOffset(args.offset);
-      const filePath = await workspace.resolveExistingFile(relativePath);
-      const content = await readTextFile(filePath);
-      const lines = content.length === 0 ? [] : content.split('\n');
-      const totalLines = lines.length;
-      if (totalLines === 0) return '(empty file)';
-      const remaining = Math.max(0, totalLines - offset + 1);
-      const requested = resolveLimit(args.limit, remaining);
-      const limit = Math.min(requested, MAX_LIMIT, remaining);
-      const start = offset - 1;
-      const slice = lines.slice(start, start + limit);
-      return formatNumberedLines(slice, offset, totalLines);
-    },
-  };
+  const relativePath = args.path;
+  const offset = resolveOffset(args.offset);
+  const filePath = await workspace.resolveFile(relativePath, {
+    mustExist: true,
+  });
+  const content = await api.readTextFile(filePath);
+  const lines = content.length === 0 ? [] : content.split('\n');
+  const totalLines = lines.length;
+  if (totalLines === 0) return '(empty file)';
+  const remaining = Math.max(0, totalLines - offset + 1);
+  const requested = resolveLimit(args.limit, remaining);
+  const limit = Math.min(requested, MAX_LIMIT, remaining);
+  const start = offset - 1;
+  const slice = lines.slice(start, start + limit);
+  return api.formatNumberedLines(slice, offset, totalLines);
 };
-
-module.exports = { readFileTool };

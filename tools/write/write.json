@@ -1,4 +1,7 @@
 {
+  "needsApproval": true,
+  "trust": "path",
+  "describe": "write {path}",
   "type": "function",
   "function": {
     "name": "write",

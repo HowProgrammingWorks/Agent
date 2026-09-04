@@ -1,4 +1,7 @@
 {
+  "needsApproval": true,
+  "trust": "path",
+  "describe": "delete {path}",
   "type": "function",
   "function": {
     "name": "delete",

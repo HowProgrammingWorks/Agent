@@ -1,11 +1,11 @@
 'use strict';
 
-const { isHashObject } = require('metautil');
-
 const STATUSES = ['pending', 'in_progress', 'completed', 'cancelled'];
 
-const normalizeItem = (item, index) => {
-  if (!isHashObject(item)) {
+let items = [];
+
+const normalizeItem = (item, index, api) => {
+  if (!api.isHashObject(item)) {
     throw new Error(`todos[${index}] must be an object.`);
   }
   const id = item.id;
@@ -24,9 +24,9 @@ const normalizeItem = (item, index) => {
   return { id, content, status };
 };
 
-const formatList = (items) => {
-  if (items.length === 0) return '(no todos)';
-  const lines = items.map((item, index) => {
+const formatList = (list) => {
+  if (list.length === 0) return '(no todos)';
+  const lines = list.map((item, index) => {
     const number = index + 1;
     const { status, id, content } = item;
     return `${number}. [${status}] ${id}: ${content}`;
@@ -34,25 +34,20 @@ const formatList = (items) => {
   return lines.join('\n');
 };
 
-const todoTool = () => ({
-  needsApproval: false,
-  items: [],
-  async execute(args) {
-    const todos = args.todos;
-    if (!Array.isArray(todos)) throw new Error('todos must be an array.');
-    const merge = args.merge !== false;
-    const next = todos.map(normalizeItem);
-    if (!merge) {
-      this.items = next;
-      return formatList(this.items);
-    }
-    const byId = new Map(this.items.map((item) => [item.id, item]));
-    for (const item of next) {
-      byId.set(item.id, item);
-    }
-    this.items = [...byId.values()];
-    return formatList(this.items);
-  },
-});
-
-module.exports = { todoTool };
+module.exports = async (args, environment) => {
+  const { api } = environment;
+  const todos = args.todos;
+  if (!Array.isArray(todos)) throw new Error('todos must be an array.');
+  const merge = args.merge !== false;
+  const next = todos.map((item, index) => normalizeItem(item, index, api));
+  if (!merge) {
+    items = next;
+    return formatList(items);
+  }
+  const byId = new Map(items.map((item) => [item.id, item]));
+  for (const item of next) {
+    byId.set(item.id, item);
+  }
+  items = [...byId.values()];
+  return formatList(items);
+};

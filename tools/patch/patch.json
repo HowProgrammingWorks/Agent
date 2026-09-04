@@ -1,4 +1,7 @@
 {
+  "needsApproval": true,
+  "trust": "path",
+  "describe": "patch {path} ({hunks} hunks)",
   "type": "function",
   "function": {
     "name": "patch",
