@@ -4,7 +4,6 @@ const fs = require('node:fs');
 
 const ESC = '\x1b[';
 const RESET = `${ESC}0m`;
-const CLEAR = `${ESC}2J${ESC}H`;
 const HIDE_CURSOR = `${ESC}?25l`;
 const SHOW_CURSOR = `${ESC}?25h`;
 const CURSOR_BLOCK_BLINK = '\x1b[1 q';
@@ -257,10 +256,187 @@ const stripAnsi = (value) => {
   return text.replace(ANSI_RE, '');
 };
 
-let frame = null;
-let prevCols = 0;
-let prevRows = 0;
+const DEFAULT_BG = colors.background.header;
+
+let grid = [];
+let screenCols = 0;
+let screenRows = 0;
+let painting = false;
 let displayActive = false;
+
+const emptyCell = () => ({
+  g: ' ',
+  w: 1,
+  bg: DEFAULT_BG,
+  fg: '',
+  bold: false,
+});
+
+const resetCell = (cell) => {
+  cell.g = ' ';
+  cell.w = 1;
+  cell.bg = DEFAULT_BG;
+  cell.fg = '';
+  cell.bold = false;
+};
+
+const ensureGrid = (cols, rows) => {
+  if (cols === screenCols && rows === screenRows) return;
+  screenCols = cols;
+  screenRows = rows;
+  grid = new Array(rows);
+  for (let y = 0; y < rows; y += 1) {
+    const row = new Array(cols);
+    for (let x = 0; x < cols; x += 1) row[x] = emptyCell();
+    grid[y] = row;
+  }
+};
+
+const clearGrid = () => {
+  for (let y = 0; y < screenRows; y += 1) {
+    const row = grid[y];
+    for (let x = 0; x < screenCols; x += 1) resetCell(row[x]);
+  }
+};
+
+const putGlyph = (x, y, g, w, bg, fg, bold) => {
+  if (w <= 0) return 0;
+  if (y < 0 || y >= screenRows) return w;
+  if (x < 0) return w;
+  if (x >= screenCols) return w;
+  const row = grid[y];
+  let width = w;
+  let glyph = g;
+  if (width > 1 && x + width > screenCols) {
+    width = 1;
+    glyph = ' ';
+  }
+  const cur = row[x];
+  if (cur.w === 0 && x > 0 && row[x - 1].w === 2) {
+    resetCell(row[x - 1]);
+    resetCell(cur);
+  }
+  if (cur.w === 2 && x + 1 < screenCols) resetCell(row[x + 1]);
+  if (width === 2 && x + 1 < screenCols) {
+    const next = row[x + 1];
+    if (next.w === 2 && x + 2 < screenCols) resetCell(row[x + 2]);
+  }
+  cur.g = glyph;
+  cur.w = width;
+  cur.bg = bg || DEFAULT_BG;
+  cur.fg = fg;
+  cur.bold = bold;
+  if (width === 2) {
+    const tail = row[x + 1];
+    tail.g = '';
+    tail.w = 0;
+    tail.bg = cur.bg;
+    tail.fg = fg;
+    tail.bold = bold;
+  }
+  return width;
+};
+
+const applySgr = (params, state) => {
+  if (params === '' || params === '0') {
+    state.bg = '';
+    state.fg = '';
+    state.bold = false;
+    return;
+  }
+  const parts = params.split(';');
+  let index = 0;
+  while (index < parts.length) {
+    const code = Number(parts[index]);
+    if (code === 0) {
+      state.bg = '';
+      state.fg = '';
+      state.bold = false;
+      index += 1;
+      continue;
+    }
+    if (code === 1) {
+      state.bold = true;
+      index += 1;
+      continue;
+    }
+    if (code === 22) {
+      state.bold = false;
+      index += 1;
+      continue;
+    }
+    const isFg = code === 38;
+    const isBg = code === 48;
+    const rgb = Number(parts[index + 1]) === 2;
+    if ((isFg || isBg) && rgb && index + 4 < parts.length) {
+      const red = Number(parts[index + 2]);
+      const green = Number(parts[index + 3]);
+      const blue = Number(parts[index + 4]);
+      if (isFg) state.fg = rgbFg(red, green, blue);
+      else state.bg = rgbBg(red, green, blue);
+      index += 5;
+      continue;
+    }
+    index += 1;
+  }
+};
+
+const plotAnsi = (x, y, value) => {
+  const text = typeof value === 'string' ? value : `${value ?? ''}`;
+  const state = { bg: '', fg: '', bold: false };
+  let col = x;
+  let index = 0;
+  while (index < text.length) {
+    const isCsi = text.charCodeAt(index) === 0x1b && text[index + 1] === '[';
+    if (isCsi) {
+      const end = text.indexOf('m', index + 2);
+      if (end === -1) break;
+      applySgr(text.slice(index + 2, end), state);
+      index = end + 1;
+      continue;
+    }
+    const escAt = text.indexOf('\x1b', index);
+    const limit = escAt === -1 ? text.length : escAt;
+    const chunk = text.slice(index, limit);
+    for (const { g, w } of graphemesOf(chunk)) {
+      col += putGlyph(col, y, g, w, state.bg, state.fg, state.bold);
+      if (col >= screenCols) break;
+    }
+    index = limit;
+  }
+};
+
+// Place every glyph with CUP so wcwidth mismatch cannot shift later cells.
+const flushRow = (parts, y, row, cols) => {
+  const rowNum = y + 1;
+  let lastBg = null;
+  let lastFg = null;
+  let lastBold = null;
+  for (let x = 0; x < cols; x += 1) {
+    const cell = row[x];
+    let glyph = cell.g;
+    if (cell.w === 0) {
+      const head = x > 0 ? row[x - 1] : null;
+      if (head && head.w === 2) continue;
+      glyph ||= ' ';
+    }
+    parts.push(`${ESC}${rowNum};${x + 1}H`);
+    const sameBg = cell.bg === lastBg;
+    const sameFg = cell.fg === lastFg;
+    const sameWeight = cell.bold === lastBold;
+    if (!sameBg || !sameFg || !sameWeight) {
+      parts.push(RESET);
+      if (cell.bg) parts.push(cell.bg);
+      if (cell.fg) parts.push(cell.fg);
+      if (cell.bold) parts.push(`${ESC}1m`);
+      lastBg = cell.bg;
+      lastFg = cell.fg;
+      lastBold = cell.bold;
+    }
+    parts.push(glyph || ' ');
+  }
+  parts.push(RESET);
+};
 
 const writeTty = (value) => {
   try {
@@ -271,32 +447,39 @@ const writeTty = (value) => {
 };
 
 const write = (x, y, value) => {
-  const seq = `${moveTo(x, y)}${value}`;
-  if (frame) frame.push(seq);
-  else writeTty(seq);
+  if (painting) {
+    plotAnsi(x, y, value);
+    return;
+  }
+  writeTty(`${moveTo(x, y)}${value}`);
 };
 
 const beginFrame = (cols, rows) => {
-  const resized = cols !== prevCols || rows !== prevRows;
-  prevCols = cols;
-  prevRows = rows;
-  frame = [SYNC_START, WRAP_OFF];
-  if (resized) frame.push(CLEAR);
+  ensureGrid(cols, rows);
+  clearGrid();
+  painting = true;
 };
 
 const endFrame = (cursor) => {
-  if (!frame) return;
-  if (cursor) frame.push(moveTo(cursor.x, cursor.y), SHOW_CURSOR);
-  else frame.push(HIDE_CURSOR);
-  frame.push(WRAP_ON, SYNC_END);
-  writeTty(frame.join(''));
-  frame = null;
+  if (!painting) return;
+  painting = false;
+  const parts = [HIDE_CURSOR, SYNC_START, WRAP_OFF];
+  for (let y = 0; y < screenRows; y += 1) {
+    flushRow(parts, y, grid[y], screenCols);
+  }
+  if (cursor) {
+    parts.push(moveTo(cursor.x, cursor.y), SHOW_CURSOR);
+  }
+  parts.push(SYNC_END);
+  writeTty(parts.join(''));
 };
 
 const enterDisplay = () => {
   if (displayActive) return;
   const setup = [
     ENTER_ALT,
+    HIDE_CURSOR,
+    WRAP_OFF,
     MOUSE_ON,
     MODIFY_KEYS_ON,
     CURSOR_WHITE,
@@ -310,9 +493,10 @@ const enterDisplay = () => {
 const resetDisplay = () => {
   if (!displayActive) return;
   displayActive = false;
-  frame = null;
-  prevCols = 0;
-  prevRows = 0;
+  painting = false;
+  grid = [];
+  screenCols = 0;
+  screenRows = 0;
   const restore = [
     WRAP_ON,
     SYNC_END,
