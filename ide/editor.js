@@ -167,7 +167,7 @@ class Editor {
   }
 
   async open(rel, keepView = false) {
-    const filePath = await workspace.resolveExistingFile(rel);
+    const filePath = await workspace.resolveFile(rel, { mustExist: true });
     const buffer = await fs.readFile(filePath);
     const prevLine = this.cursorLine;
     const prevCol = this.cursorCol;
@@ -366,7 +366,7 @@ class Editor {
 
   async save() {
     if (!this.rel || !this.dirty || this.readOnly()) return false;
-    const filePath = await workspace.resolveWritableFile(this.rel);
+    const filePath = await workspace.resolveFile(this.rel);
     await fs.writeFile(filePath, this.source(), 'utf8');
     this.savedSource = this.source();
     this.dirty = false;

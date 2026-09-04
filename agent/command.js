@@ -3,7 +3,7 @@
 const { exec, execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 
-const { truncateOutput } = require('../agent/textfile.js');
+const { truncateOutput } = require('./textfile.js');
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);

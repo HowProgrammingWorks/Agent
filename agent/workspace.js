@@ -5,6 +5,8 @@ const path = require('node:path');
 
 const { findGitRoot } = require('./git.js');
 
+const workspace = {};
+
 const isInside = (root, candidate) => {
   const prefix = root + path.sep;
   return candidate === root || candidate.startsWith(prefix);
@@ -25,20 +27,10 @@ const nearestExistingAncestor = async (candidate) => {
   }
 };
 
-const workspace = {
-  root: null,
-  realRoot: null,
-  gitRoot: null,
-  resolveExistingFile: null,
-  resolveWritableFile: null,
-  resolveExistingPath: null,
-};
-
-const resolveFile = async (relativePath, options) => {
+workspace.resolveFile = async (relativePath, options) => {
   const opts = options ?? {};
   const mustExist = opts.mustExist ?? false;
-  const lexicalRoot = workspace.root;
-  const realRoot = workspace.realRoot;
+  const { root, realRoot } = workspace;
 
   if (typeof relativePath !== 'string' || relativePath.length === 0) {
     throw new Error('Path must be a non-empty string.');
@@ -48,8 +40,8 @@ const resolveFile = async (relativePath, options) => {
     throw new Error('Only paths relative to the workspace are allowed.');
   }
 
-  const lexicalTarget = path.resolve(lexicalRoot, relativePath);
-  if (!isInside(lexicalRoot, lexicalTarget)) {
+  const lexicalTarget = path.resolve(root, relativePath);
+  if (!isInside(root, lexicalTarget)) {
     throw new Error(`Path escapes workspace: ${relativePath}`);
   }
 
@@ -70,31 +62,44 @@ const resolveFile = async (relativePath, options) => {
   return lexicalTarget;
 };
 
-const resolveExistingFile = (relativePath) =>
-  resolveFile(relativePath, { mustExist: true });
-
-const resolveWritableFile = (relativePath) =>
-  resolveFile(relativePath, { mustExist: false });
-
-const resolveExistingPath = async (relativePath) => {
+workspace.resolveExistingPath = async (relativePath) => {
   const empty = relativePath === undefined || relativePath === '';
   const target = empty ? '.' : relativePath;
-  const lexicalTarget = await resolveFile(target, { mustExist: true });
+  const options = { mustExist: true };
+  const lexicalTarget = await workspace.resolveFile(target, options);
   const stat = await fs.lstat(lexicalTarget);
   const isFile = stat.isFile();
   const isDirectory = stat.isDirectory();
   return { path: lexicalTarget, isFile, isDirectory };
 };
 
-workspace.resolveExistingFile = resolveExistingFile;
-workspace.resolveWritableFile = resolveWritableFile;
-workspace.resolveExistingPath = resolveExistingPath;
-
-const openWorkspace = async (root = process.cwd()) => {
-  const lexicalRoot = path.resolve(root);
-  workspace.root = lexicalRoot;
-  workspace.realRoot = await fs.realpath(lexicalRoot);
-  workspace.gitRoot = await findGitRoot(lexicalRoot);
+const resolveRoot = async (root) => {
+  const extra = process.argv.slice(2);
+  if (root === undefined && extra.length > 1) {
+    throw new Error('Expected at most one workspace path.');
+  }
+  const candidate = root ?? extra[0] ?? process.cwd();
+  const lexicalRoot = path.resolve(candidate);
+  let stat;
+  try {
+    stat = await fs.stat(lexicalRoot);
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      throw new Error(`Not found: ${lexicalRoot}`);
+    }
+    throw error;
+  }
+  if (!stat.isDirectory()) {
+    throw new Error(`Not a directory: ${lexicalRoot}`);
+  }
+  return lexicalRoot;
 };
 
-module.exports = { isInside, workspace, openWorkspace };
+workspace.init = async (arg) => {
+  const root = await resolveRoot(arg);
+  const realRoot = await fs.realpath(root);
+  const gitRoot = await findGitRoot(root);
+  Object.assign(workspace, { root, realRoot, gitRoot });
+};
+
+module.exports = { isInside, workspace };
